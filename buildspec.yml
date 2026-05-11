@@ -6,4 +6,4 @@ phases:
   post_build:
     commands:
       - echo "Desplegando en EC2 usando AWS Systems Manager..."
-      - aws ssm send-command --instance-ids "i-PON_AQUI_TU_ID_DE_INSTANCIA" --document-name "AWS-RunShellScript" --parameters 'commands=["cd /home/ubuntu", "if [ ! -d avance-devops ]; then git clone https://github.com/lashmiadameleyv-art/avance-devops.git; fi", "cd avance-devops", "git pull origin main"]'
+      - aws ssm send-command --instance-ids "i-0fe9cb304d13db08c" --document-name "AWS-RunShellScript" --parameters 'commands=["cd /home/ubuntu", "if [ ! -d avance-devops ]; then git clone https://github.com/lashmiadameleyv-art/avance-devops.git; fi", "cd avance-devops", "git pull origin main"]'
