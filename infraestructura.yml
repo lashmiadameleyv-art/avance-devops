@@ -1,0 +1,45 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'Infraestructura como Código: S3 y EC2 con Autoescalado'
+
+Resources:
+  # 1. Bucket S3 para el equipo
+  BucketProyecto:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub "bucket-devops-ids-${AWS::AccountId}"
+
+  # 2. Plantilla de lanzamiento para las instancias
+  PlantillaEC2:
+    Type: AWS::EC2::LaunchTemplate
+    Properties: 
+      LaunchTemplateName: PlantillaWeb-DevOps
+      LaunchTemplateData:
+        InstanceType: t2.micro
+        ImageId: ami-0c101f26f147fa7fd # Amazon Linux 2023 en us-east-1
+        IamInstanceProfile:
+          Name: LabInstanceProfile
+        TagSpecifications:
+          - ResourceType: instance
+            Tags:
+              - Key: Name
+                Value: ServidorPipeline
+
+  # 3. El Grupo de Autoescalado
+  GrupoAutoescalado:
+    Type: AWS::AutoScaling::AutoScalingGroup
+    Properties:
+      AutoScalingGroupName: GrupoAutoescalado-DevOps
+      MinSize: '1'
+      MaxSize: '2'
+      DesiredCapacity: '1'
+      AvailabilityZones: 
+        - us-east-1a
+      LaunchTemplate:
+        LaunchTemplateId: !Ref PlantillaEC2
+        Version: !GetAtt PlantillaEC2.LatestVersionNumber
+
+Outputs:
+  NombreDelBucket:
+    Value: !Ref BucketProyecto
+  NombreDelGrupoASG:
+    Value: !Ref GrupoAutoescalado
