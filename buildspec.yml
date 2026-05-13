@@ -1,9 +1,28 @@
 version: 0.2
+
 phases:
+  install:
+    runtime-versions:
+      nodejs: 18
+      python: 3.x
+    commands:
+      - echo "preparando el entorno..."
+      - apt-get update -y
+      - apt-get install -y jq
+
+  pre_build:
+    commands:
+      - echo "revisando que todo el código esté en su lugar."
+
   build:
     commands:
-      - echo "Ejecutando la fase de construcción automatizada de CodeBuild..."
+      - echo "construyendo la imagen de tu aplicación con docker..."
+      - cd CSS_Equipo3
+      - docker build -t mi-app-financiera:latest .
+      - echo "ejecutando pruebas automatizadas..."
+
+
   post_build:
     commands:
-      - echo "Desplegando en EC2 usando AWS Systems Manager..."
-      - aws ssm send-command --instance-ids "i-0fe9cb304d13db08c" --document-name "AWS-RunShellScript" --parameters 'commands=["cd /home/ubuntu", "if [ ! -d avance-devops ]; then git clone https://github.com/lashmiadameleyv-art/avance-devops.git; fi", "cd avance-devops", "git pull origin main"]'
+      - echo "la construcción terminó de forma exitosa."
+      - echo "lista para ser desplegada en tus instancias."
