@@ -1,45 +1,47 @@
 AWSTemplateFormatVersion: '2010-09-09'
-Description: 'Infraestructura como Código: S3 y EC2 con Autoescalado'
+Description: 'infraestructura base para soluciones tecnológicas del futuro'
 
 Resources:
-  # 1. Bucket S3 para el equipo
-  BucketProyecto:
-    Type: AWS::S3::Bucket
+  MiVPC:
+    Type: AWS::EC2::VPC
     Properties:
-      BucketName: !Sub "bucket-devops-ids-${AWS::AccountId}"
+      CidrBlock: 10.0.0.0/16
+      EnableDnsSupport: true
+      EnableDnsHostnames: true
+      Tags:
+        - Key: Name
+          Value: vpc-proyecto
 
-  # 2. Plantilla de lanzamiento para las instancias
-  PlantillaEC2:
-    Type: AWS::EC2::LaunchTemplate
-    Properties: 
-      LaunchTemplateName: PlantillaWeb-DevOps
-      LaunchTemplateData:
-        InstanceType: t2.micro
-        ImageId: ami-0c101f26f147fa7fd # Amazon Linux 2023 en us-east-1
-        IamInstanceProfile:
-          Name: LabInstanceProfile
-        TagSpecifications:
-          - ResourceType: instance
-            Tags:
-              - Key: Name
-                Value: ServidorPipeline
-
-  # 3. El Grupo de Autoescalado
-  GrupoAutoescalado:
-    Type: AWS::AutoScaling::AutoScalingGroup
+  SubredPublica:
+    Type: AWS::EC2::Subnet
     Properties:
-      AutoScalingGroupName: GrupoAutoescalado-DevOps
-      MinSize: '1'
-      MaxSize: '2'
-      DesiredCapacity: '1'
-      AvailabilityZones: 
-        - us-east-1a
-      LaunchTemplate:
-        LaunchTemplateId: !Ref PlantillaEC2
-        Version: !GetAtt PlantillaEC2.LatestVersionNumber
+      VpcId: !Ref MiVPC
+      CidrBlock: 10.0.1.0/24
+      MapPublicIpOnLaunch: true
+      AvailabilityZone: us-east-1a
 
-Outputs:
-  NombreDelBucket:
-    Value: !Ref BucketProyecto
-  NombreDelGrupoASG:
-    Value: !Ref GrupoAutoescalado
+  GrupoSeguridadWeb:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: permite trafico http desde ips especificas
+      VpcId: !Ref MiVPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp: 0.0.0.0/0
+  InstanciaApp:
+    Type: AWS::EC2::Instance
+    Properties:
+      InstanceType: t2.micro
+      ImageId: ami-0c7217cdde317cfec 
+      NetworkInterfaces:
+        - GroupSet:
+            - !Ref GrupoSeguridadWeb
+          AssociatePublicIpAddress: true
+          DeviceIndex: '0'
+          SubnetId: !Ref SubredPublica
+      IamInstanceProfile: LabInstanceProfile
+      Tags:
+        - Key: Name
+          Value: servidor-app-financiera
