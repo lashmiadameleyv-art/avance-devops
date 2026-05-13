@@ -1,94 +1,50 @@
 import boto3
+import json
 from datetime import datetime, timedelta
 
-# --- CONFIGURACIÓN PRINCIPAL ---
-REGION = 'us-east-1'
-NOMBRE_ASG = 'GrupoAutoescalado-DevOps' # El nombre exacto que está en tu YAML
+# configuramos todo con mucha calma para la región permitida
+region = 'us-east-1'
+ec2_client = boto3.client('ec2', region_name=region)
+s3_client = boto3.client('s3', region_name=region)
+cw_client = boto3.client('cloudwatch', region_name=region)
+dynamo_resource = boto3.resource('dynamodb', region_name=region)
 
-# Inicializamos los clientes
-ec2 = boto3.client('ec2', region_name=REGION)
-cloudwatch = boto3.client('cloudwatch', region_name=REGION)
-s3 = boto3.client('s3', region_name=REGION)
-autoscaling = boto3.client('autoscaling', region_name=REGION)
+def listar_recursos():
+    print("buscando tus instancias ec2...")
+    instancias = ec2_client.describe_instances()
+    for reservacion in instancias['Reservations']:
+        for inst in reservacion['Instances']:
+            print(f"- instancia: {inst['InstanceId']}, estado: {inst['State']['Name']}")
 
-def listar_instancias_ec2():
-    print("\n[EC2] Listando instancias en la cuenta...")
-    respuesta = ec2.describe_instances()
-    instancia_activa = None
-    
-    for reservacion in respuesta['Reservations']:
-        for instancia in reservacion['Instances']:
-            id_inst = instancia['InstanceId']
-            estado = instancia['State']['Name']
-            print(f"  -> ID: {id_inst} | Estado: {estado}")
-            
-            # Guardamos la primera instancia que esté corriendo para sacarle las métricas
-            if estado == 'running' and not instancia_activa:
-                instancia_activa = id_inst
-                
-    return instancia_activa
+    print("\nbuscando tus buckets de s3...")
+    buckets = s3_client.list_buckets()
+    for bucket in buckets['Buckets']:
+        print(f"- bucket: {bucket['Name']}")
 
 def obtener_metricas_cpu(instance_id):
-    if not instance_id:
-        print("\n[CloudWatch] No se encontró ninguna instancia en estado 'running' para medir.")
-        return
-        
-    print(f"\n[CloudWatch] Obteniendo CPU de la instancia activa: {instance_id}")
-    tiempo_fin = datetime.utcnow()
-    tiempo_inicio = tiempo_fin - timedelta(hours=1)
-    
-    respuesta = cloudwatch.get_metric_statistics(
-        Namespace='AWS/EC2', 
+    print(f"\nrevisando la salud de tu instancia {instance_id}...")
+    respuesta = cw_client.get_metric_statistics(
+        Namespace='AWS/EC2',
         MetricName='CPUUtilization',
         Dimensions=[{'Name': 'InstanceId', 'Value': instance_id}],
-        StartTime=tiempo_inicio, 
-        EndTime=tiempo_fin,
-        Period=300, 
+        StartTime=datetime.utcnow() - timedelta(hours=1),
+        EndTime=datetime.utcnow(),
+        Period=3600,
         Statistics=['Average']
     )
-    
-    puntos = respuesta.get('Datapoints', [])
-    if not puntos:
-        print("  -> No hay datos recientes (la instancia es muy nueva o no tiene carga).")
-    else:
-        for p in sorted(puntos, key=lambda x: x['Timestamp']):
-            print(f"  -> {p['Timestamp']} | CPU: {p['Average']:.2f}%")
+    for punto in respuesta['Datapoints']:
+        print(f"- uso promedio de cpu: {punto['Average']}%")
 
-def listar_s3():
-    print("\n[S3] Listando Buckets...")
-    respuesta = s3.list_buckets()
-    buckets = respuesta.get('Buckets', [])
-    if not buckets:
-        print("  -> No se encontraron buckets.")
-    for bucket in buckets:
-        print(f"  📦 Bucket: {bucket['Name']}")
+def gestionar_dynamodb():
+    print("\nconectando con tu base de datos dynamodb...")
+    tabla_nombre = 'TablaFinanciera'
 
-def gestionar_autoescalado(nombre_grupo):
-    print(f"\n[AutoScaling] Configurando política para el grupo: {nombre_grupo}")
-    try:
-        autoscaling.put_scaling_policy(
-            AutoScalingGroupName=nombre_grupo,
-            PolicyName='EscaladoPorCPU-Proyecto',
-            PolicyType='TargetTrackingScaling',
-            TargetTrackingConfiguration={
-                'PredefinedMetricSpecification': {'PredefinedMetricType': 'ASGAverageCPUUtilization'},
-                'TargetValue': 70.0
-            }
-        )
-        print("  -> ✅ Política de autoescalado aplicada con éxito al grupo.")
-    except Exception as e:
-        print(f"  -> Error (¿Ya se ejecutó el archivo YAML para crear el grupo?): {e}")
+    tabla = dynamo_resource.Table(tabla_nombre)
+    
+    # insertar registro
+    tabla.put_item(Item={'id': '1', 'mensaje': 'operación exitosa', 'estado': 'activo'})
+    print("- registro insertado suavemente.")
 
-if __name__ == "__main__":
-    listar_s3()
-    
-    # 1. Lista las instancias y detecta el ID automáticamente
-    id_instancia_encontrada = listar_instancias_ec2()
-    
-    # 2. Usa ese ID para sacar las métricas
-    obtener_metricas_cpu(id_instancia_encontrada)
-    
-    # 3. Aplica la regla al grupo de autoescalado
-    gestionar_autoescalado(NOMBRE_ASG)
-    
-    print("\n🚀 ¡Tareas de automatización finalizadas exitosamente!")
+if __name__ == '__main__':
+    print("iniciando las tareas de automatización...\n")
+    listar_recursos()
